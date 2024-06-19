@@ -27,9 +27,11 @@ test_df = pd.read_csv('./vihsd/test.csv')
 import re
 import numpy as np
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print('cuda: ', device)
 USE_CUDA = torch.cuda.is_available()
+device = torch.device("cuda" if USE_CUDA else "cpu")
+print('use_cuda: ', USE_CUDA)
+print('cuda: ', device)
+
 STOPWORDS = './vietnamese-stopwords.txt'
 with open(STOPWORDS, "r") as ins:
     stopwords = []
@@ -315,4 +317,4 @@ for epoch in range(epochs):
             
             # print(f'Loss: {train_loss:.4f}')
             print('Accuracy: ', accuracy_score(true_labels, predictions))
-            print('F1:', f1_score(true_labels, predictions, weigted='macro'))
+            print('F1:', f1_score(true_labels, predictions, weighted='macro'))
