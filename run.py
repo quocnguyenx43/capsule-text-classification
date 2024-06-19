@@ -219,9 +219,7 @@ class CapsNet(nn.Module):
         self.phobert.requires_grad_(True)
         
     def forward(self, ids, attn_mask):
-        print('he')
         x = self.phobert(ids, attn_mask).last_hidden_state.unsqueeze(-1).permute(0, 2, 1, 3)
-        print(x.shape)
         output = self.digit_capsules(self.primary_capsules(self.conv_layer(x)))
         reconstructions, masked = self.decoder(output, x)
         return output, reconstructions, masked
@@ -274,5 +272,6 @@ dev_dataloader = DataLoader(dev_dataset, batch_size=32, shuffle=False)
 test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
 capsule_net = CapsNet().to('cuda')
-print(capsule_net(X_train_ids[:2].to('cuda'), X_train_attn_masks[:2].to('cuda')))
+a, b = capsule_net(X_train_ids[:2].to('cuda'), X_train_attn_masks[:2].to('cuda'))
+print(a.shape, b.shape)
 
