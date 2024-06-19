@@ -247,14 +247,14 @@ class CapsNet(nn.Module):
 print("Preprocessing")
 tokenizer = AutoTokenizer.from_pretrained("vinai/phobert-base")
 
-X_train = train_df.head(10)['free_text'].fillna('')
-y_train = train_df.head(10)['label_id'].values
+X_train = train_df.head(100)['free_text'].fillna('')
+y_train = train_df.head(100)['label_id'].values
 
-X_dev = dev_df.head(10)['free_text'].fillna('')
-y_dev = dev_df.head(10)['label_id'].values
+X_dev = dev_df.head(100)['free_text'].fillna('')
+y_dev = dev_df.head(100)['label_id'].values
 
-X_test = test_df.head(10)['free_text'].fillna('')
-y_test = test_df.head(10)['label_id'].values
+X_test = test_df.head(100)['free_text'].fillna('')
+y_test = test_df.head(100)['label_id'].values
 
 X_train_ids, X_train_attn_masks = full_preprocess(X_train, tokenizer)
 X_dev_ids, X_dev_attn_masks = full_preprocess(X_dev, tokenizer)
@@ -299,16 +299,17 @@ for epoch in range(epochs):
 
             optimizer.zero_grad()
             x, output, reconstructions, masked = capsule_net(ids, attn_mask)
+            x, output, reconstructions, masked = x.to('cuda'), output.to('cuda'), reconstructions.to('cuda'), masked.to('cuda')
             loss = capsule_net.loss(x, output, target, reconstructions)
             loss.backward()
             optimizer.step()
 
-            train_loss += loss.data[0]
+            # train_loss += loss.data[0]
             
             true_labels.extend(target)
             predictions.extend(torch.max(masked, dim=1)[1])
             
     
-            print(f'Loss: {train_loss:.4f}')
+            # print(f'Loss: {train_loss:.4f}')
             print('Accuracy: ', accuracy_score(true_labels, predictions))
             print('F1:', f1_score(true_labels, predictions))
