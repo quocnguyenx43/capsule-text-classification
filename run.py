@@ -103,6 +103,8 @@ class ConvLayer(nn.Module):
     def forward(self, x):
         return F.relu(self.conv(x))
 
+
+
 class PrimaryCaps(nn.Module):
 
     def __init__(self, num_capsules=8, in_channels=256, out_channels=32, kernel_size=9):
@@ -217,7 +219,9 @@ class CapsNet(nn.Module):
         self.phobert.requires_grad_(True)
         
     def forward(self, ids, attn_mask):
+        print('he')
         x = self.phobert(ids, attn_mask).last_hidden_state.squeeze(-1)
+        print(x)
         output = self.digit_capsules(self.primary_capsules(self.conv_layer(x)))
         reconstructions, masked = self.decoder(output, x)
         return output, reconstructions, masked
@@ -272,7 +276,3 @@ test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 capsule_net = CapsNet().to('cuda')
 print(capsule_net(X_train_ids[:2].to('cuda'), X_train_attn_masks[:2].to('cuda')))
 
-# for batch in train_dataloader:
-#     print(batch)
-#     output = capsule_net(batch['input_ids'].to('cuda'), batch['attention_mask'].to('cuda'))
-#     break
