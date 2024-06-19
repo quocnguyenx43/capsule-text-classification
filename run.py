@@ -249,14 +249,14 @@ class CapsNet(nn.Module):
 print("Preprocessing")
 tokenizer = AutoTokenizer.from_pretrained("vinai/phobert-base")
 
-X_train = train_df.head(100)['free_text'].fillna('')
-y_train = train_df.head(100)['label_id'].values
+X_train = train_df['free_text'].fillna('')
+y_train = train_df['label_id'].values
 
-X_dev = dev_df.head(100)['free_text'].fillna('')
-y_dev = dev_df.head(100)['label_id'].values
+X_dev = dev_df['free_text'].fillna('')
+y_dev = dev_df['label_id'].values
 
-X_test = test_df.head(100)['free_text'].fillna('')
-y_test = test_df.head(100)['label_id'].values
+X_test = test_df['free_text'].fillna('')
+y_test = test_df['label_id'].values
 
 X_train_ids, X_train_attn_masks = full_preprocess(X_train, tokenizer)
 X_dev_ids, X_dev_attn_masks = full_preprocess(X_dev, tokenizer)
@@ -345,3 +345,5 @@ for epoch in range(epochs):
     print(f'Loss: {dev_loss:.4f}')
     print('Accuracy: ', accuracy_score(true_labels, predictions))
     print('F1:', f1_score(true_labels, predictions, average='macro'))
+    print()
+    print()
