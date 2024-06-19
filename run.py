@@ -307,7 +307,7 @@ for epoch in range(epochs):
             loss.backward()
             optimizer.step()
 
-            # train_loss += loss.data[0]
+            train_loss += loss
             
             true_labels.extend(labels.cpu().numpy().tolist())
             predictions.extend(torch.max(masked, dim=1)[1].cpu().numpy().tolist())
@@ -315,6 +315,6 @@ for epoch in range(epochs):
             print(true_labels)
             print(predictions)
             
-            # print(f'Loss: {train_loss:.4f}')
-            print('Accuracy: ', accuracy_score(true_labels, predictions))
-            print('F1:', f1_score(true_labels, predictions, average='macro'))
+    print(f'Loss: {train_loss:.4f}')
+    print('Accuracy: ', accuracy_score(true_labels, predictions))
+    print('F1:', f1_score(true_labels, predictions, average='macro'))
