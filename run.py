@@ -312,9 +312,36 @@ for epoch in range(epochs):
             true_labels.extend(labels.cpu().numpy().tolist())
             predictions.extend(torch.max(masked, dim=1)[1].cpu().numpy().tolist())
 
-            print(true_labels)
-            print(predictions)
-            
     print(f'Loss: {train_loss:.4f}')
+    print('Accuracy: ', accuracy_score(true_labels, predictions))
+    print('F1:', f1_score(true_labels, predictions, average='macro'))
+
+
+    # Evaluating
+    capsule_net.eval()
+    dev_loss = 0
+    true_labels = []
+    predictions = []
+    with torch.no_grad():
+        # Wrap the dataloader with tqdm to monitor progress
+        with tqdm(dev_dataloader, desc="Evaluation") as tqdm_loader:
+            for batch_idx, batch in enumerate(tqdm_loader):
+                tqdm_loader.set_description(f"Evaluation, Batch {batch_idx + 1}/{len(dev_dataloader)}")
+
+                ids = batch['input_ids'].to('cuda')
+                attn_mask = batch['attention_mask'].to('cuda')
+                labels = batch['labels']
+                target = torch.nn.functional.one_hot(labels, num_classes=3).to('cuda')
+
+                x, output, reconstructions, masked = capsule_net(ids, attn_mask)
+                x, output, reconstructions, masked = x.to('cuda'), output.to('cuda'), reconstructions.to('cuda'), masked.to('cuda')
+                loss = capsule_net.loss(x, output, target, reconstructions)
+                
+                dev_loss += loss
+                
+                true_labels.extend(labels.cpu().numpy().tolist())
+                predictions.extend(torch.max(masked, dim=1)[1].cpu().numpy().tolist())
+
+    print(f'Loss: {dev_loss:.4f}')
     print('Accuracy: ', accuracy_score(true_labels, predictions))
     print('F1:', f1_score(true_labels, predictions, average='macro'))
