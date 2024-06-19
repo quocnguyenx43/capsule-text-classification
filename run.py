@@ -29,6 +29,7 @@ import numpy as np
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print('cuda: ', device)
+USE_CUDA = torch.cuda.is_available()
 STOPWORDS = './vietnamese-stopwords.txt'
 with open(STOPWORDS, "r") as ins:
     stopwords = []
@@ -269,7 +270,9 @@ dev_dataloader = DataLoader(dev_dataset, batch_size=32, shuffle=False)
 test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
 capsule_net = CapsNet().to('cuda')
-for batch in train_dataloader:
-    print(batch)
-    capsule_net(batch['input_ids'].to('cuda'), batch['attention_mask'].to('cuda'))
-    break
+print(capsule_net(X_train_ids[:2].to('cuda'), X_train_attn_masks[:2].to('cuda')))
+
+# for batch in train_dataloader:
+#     print(batch)
+#     output = capsule_net(batch['input_ids'].to('cuda'), batch['attention_mask'].to('cuda'))
+#     break
