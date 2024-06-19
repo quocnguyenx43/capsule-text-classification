@@ -295,7 +295,8 @@ for epoch in range(epochs):
 
             ids = batch['input_ids'].to('cuda')
             attn_mask = batch['attention_mask'].to('cuda')
-            target = torch.nn.functional.one_hot(batch['labels'], num_classes=3).to('cuda')
+            labels = batch['labels']
+            target = torch.nn.functional.one_hot(labels, num_classes=3).to('cuda')
 
             optimizer.zero_grad()
             x, output, reconstructions, masked = capsule_net(ids, attn_mask)
@@ -306,13 +307,12 @@ for epoch in range(epochs):
 
             # train_loss += loss.data[0]
             
-            true_labels.extend(target.cpu().numpy().tolist())
+            true_labels.extend(labels.cpu().numpy().tolist())
             predictions.extend(torch.max(masked, dim=1)[1].cpu().numpy().tolist())
 
             print(true_labels)
             print(predictions)
             
-    
             # print(f'Loss: {train_loss:.4f}')
             print('Accuracy: ', accuracy_score(true_labels, predictions))
             print('F1:', f1_score(true_labels, predictions))
