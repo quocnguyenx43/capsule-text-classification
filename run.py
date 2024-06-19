@@ -98,9 +98,9 @@ import torch.nn.functional as F
 
 class ConvLayer(nn.Module):
 
-    def __init__(self, in_channels=1, out_channels=256, kernel_size=9):
+    def __init__(self, in_channels=1, out_channels=256, kernel_size=9, stride=2):
         super(ConvLayer, self).__init__()
-        self.conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=1)
+        self.conv = nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=1)
 
     def forward(self, x):
         return F.relu(self.conv(x))
@@ -113,10 +113,10 @@ class PrimaryCaps(nn.Module):
         super(PrimaryCaps, self).__init__()
         self.num_capsules = num_capsules
         self.capsules = nn.ModuleList([
-            nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=2, padding=0)
+            nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=2, padding=0)
             for _ in range(num_capsules)
         ])
-    
+
     def forward(self, x):
         # (batch_size, in_channels, height, width)
         u = [capsule(x) for capsule in self.capsules]
@@ -124,7 +124,7 @@ class PrimaryCaps(nn.Module):
         u = u.view(x.size(0), -1, self.num_capsules)
         # (batch_size, out_dims, num_caps)
         return self.squash(u)
-    
+
     def squash(self, input_tensor):
         squared_norm = (input_tensor ** 2).sum(-1, keepdim=True)
         output_tensor = squared_norm *  input_tensor / ((1. + squared_norm) * torch.sqrt(squared_norm))
@@ -184,10 +184,10 @@ class Decoder(nn.Module):
             nn.ReLU(inplace=True),
             nn.Linear(512, 1024),
             nn.ReLU(inplace=True),
-            nn.Linear(1024, self.output_size[0] * self.output_size[1] * self.output_size[2]),
+            nn.Linear(1024, self.output_size[0] * self.output_size[1]),
             nn.Tanh() # from -1 to 1
         )
-        
+
     def forward(self, x, data):
         classes = torch.sqrt((x ** 2).sum(2))
         classes = F.softmax(classes)
@@ -200,8 +200,8 @@ class Decoder(nn.Module):
         masked = masked.index_select(dim=0, index=max_indices.squeeze(1).data)
         x = (x * masked[:, :, None, None]).view(x.size(0), -1)
         reconstructions = self.reconstraction_layers(x)
-        reconstructions = reconstructions.view(-1, self.output_size[0], self.output_size[1], self.output_size[2])
-        
+        reconstructions = reconstructions.view(-1, self.output_size[0], self.output_size[1])
+
         return reconstructions, masked
     
 class CapsNet(nn.Module):
@@ -209,10 +209,10 @@ class CapsNet(nn.Module):
         super(CapsNet, self).__init__()
 
         self.phobert = AutoModel.from_pretrained("vinai/phobert-base")
-        self.conv_layer = ConvLayer(in_channels=768, out_channels=256, kernel_size=(9,1))
-        self.primary_capsules = PrimaryCaps(num_capsules=8, in_channels=256, out_channels=32, kernel_size=(9, 1))
-        self.digit_capsules = DigitCaps(num_routes=2944, in_channels=8, num_capsules=3, out_channels=16)
-        self.decoder = Decoder(hidden_size=3*16, output_size=(768, 200, 1), num_classes=3)
+        self.conv_layer = ConvLayer(in_channels=1, out_channels=128, kernel_size=512, stride=128)
+        self.primary_capsules = PrimaryCaps(num_capsules=8, in_channels=128, out_channels=32, kernel_size=9)
+        self.digit_capsules = DigitCaps(num_capsules=3, num_routes=4000, in_channels=8, out_channels=64)
+        self.decoder = Decoder(hidden_size=3*64, output_size=(1, 768), num_classes=3)
 
         self.mse_loss = nn.MSELoss()
 
@@ -220,7 +220,7 @@ class CapsNet(nn.Module):
         self.phobert.requires_grad_(True)
 
     def forward(self, ids, attn_mask):
-        x = self.phobert(ids, attn_mask).last_hidden_state.unsqueeze(-1).permute(0, 2, 1, 3)
+        x = self.phobert(ids, attn_mask).last_hidden_state.mean(dim=1).unsqueeze(1)
         output = self.digit_capsules(self.primary_capsules(self.conv_layer(x)))
         reconstructions, masked = self.decoder(output, x)
         return x, output, reconstructions, masked
