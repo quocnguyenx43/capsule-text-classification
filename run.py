@@ -171,79 +171,33 @@ class DigitCaps(nn.Module):
         output_tensor = squared_norm *  input_tensor / ((1. + squared_norm) * torch.sqrt(squared_norm))
         return output_tensor
     
-class Decoder(nn.Module):
-
-    def __init__(self, hidden_size=16*10, output_size=(1, 28, 28), num_classes=10):
-
-        super(Decoder, self).__init__()
-        self.hidden_size = hidden_size
-        self.num_classes = num_classes
-        self.output_size = output_size
-        self.reconstraction_layers = nn.Sequential(
-            nn.Linear(hidden_size, 512),
-            nn.ReLU(inplace=True),
-            nn.Linear(512, 1024),
-            nn.ReLU(inplace=True),
-            nn.Linear(1024, self.output_size[0] * self.output_size[1]),
-            nn.Tanh() # from -1 to 1
-        )
-
-    def forward(self, x, data):
-        classes = torch.sqrt((x ** 2).sum(2))
-        classes = F.softmax(classes)
-        max_values, max_indices = classes.max(dim=1)
-
-        masked = Variable(torch.sparse.torch.eye(self.num_classes))
-        if USE_CUDA:
-            masked = masked.cuda()
-        # masked = (batch_size, num_classes) 0/1, 1 is highest probability class
-        masked = masked.index_select(dim=0, index=max_indices.squeeze(1).data)
-        x = (x * masked[:, :, None, None]).view(x.size(0), -1)
-        reconstructions = self.reconstraction_layers(x)
-        reconstructions = reconstructions.view(-1, self.output_size[0], self.output_size[1])
-
-        return reconstructions, masked
-    
 class CapsNet(nn.Module):
     def __init__(self):
         super(CapsNet, self).__init__()
 
         self.phobert = AutoModel.from_pretrained("vinai/phobert-base")
-        self.conv_layer = ConvLayer(in_channels=1, out_channels=128, kernel_size=512, stride=128)
-        self.primary_capsules = PrimaryCaps(num_capsules=8, in_channels=128, out_channels=32, kernel_size=9)
-        self.digit_capsules = DigitCaps(num_capsules=3, num_routes=4000, in_channels=8, out_channels=64)
-        self.decoder = Decoder(hidden_size=3*64, output_size=(1, 768), num_classes=3)
-
-        self.mse_loss = nn.MSELoss()
-
         self.phobert.train()
         self.phobert.requires_grad_(True)
 
+        self.conv_layer = ConvLayer(in_channels=1, out_channels=128, kernel_size=512, stride=128)
+        self.primary_capsules = PrimaryCaps(num_capsules=8, in_channels=128, out_channels=32, kernel_size=9)
+        self.digit_capsules = DigitCaps(num_capsules=32, num_routes=4000, in_channels=8, out_channels=32)
+        
+        self.FCs = nn.Sequential(
+            nn.Linear(32*32, 512),
+            nn.ReLU(),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Linear(256, 3)
+        )
+
     def forward(self, ids, attn_mask):
         x = self.phobert(ids, attn_mask).last_hidden_state.mean(dim=1).unsqueeze(1)
-        output = self.digit_capsules(self.primary_capsules(self.conv_layer(x)))
-        reconstructions, masked = self.decoder(output, x)
-        return x, output, reconstructions, masked
-
-    def loss(self, data, x, target, reconstructions):
-        return self.margin_loss(x, target) + self.reconstruction_loss(data, reconstructions)
-
-    def margin_loss(self, x, labels, size_average=True):
-        batch_size = x.size(0)
-
-        v_c = torch.sqrt((x**2).sum(dim=2, keepdim=True))
-
-        left = F.relu(0.9 - v_c).view(batch_size, -1)
-        right = F.relu(v_c - 0.1).view(batch_size, -1)
-
-        loss = labels * left + 0.5 * (1.0 - labels) * right
-        loss = loss.sum(dim=1).mean()
-
-        return loss
-
-    def reconstruction_loss(self, data, reconstructions):
-        loss = self.mse_loss(reconstructions.reshape(reconstructions.size(0), -1), data.reshape(reconstructions.size(0), -1))
-        return loss * 0.0005
+        x = self.digit_capsules(self.primary_capsules(self.conv_layer(x)))
+        x = x.reshape(x.shape[0], -1)
+        x = self.FCs(x)
+        soft_max_output = F.log_softmax(x, dim=1)
+        return soft_max_output
 
 
 print("Preprocessing")
@@ -273,15 +227,10 @@ dev_dataloader = DataLoader(dev_dataset, batch_size=32, shuffle=False)
 test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
 capsule_net = CapsNet().to('cuda')
+print(capsule_net)
 from torch.optim import Adam
-optimizer = Adam(capsule_net.parameters(), lr=0.001)
-# x, output, reconstructions, masked = capsule_net(X_train_ids[:2].to('cuda'), X_train_attn_masks[:2].to('cuda'))
-# print(capsule_net.loss(
-#     x.to('cuda'),
-#     output.to('cuda'),
-#     torch.nn.functional.one_hot(torch.tensor(y_train[:2]), num_classes=3).to('cuda'),
-#     reconstructions.to('cuda')
-# ))
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.Adam(capsule_net.parameters(), lr=0.001)
 
 from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
 epochs = 10
@@ -301,16 +250,15 @@ for epoch in range(epochs):
             target = torch.nn.functional.one_hot(labels, num_classes=3).to('cuda')
 
             optimizer.zero_grad()
-            x, output, reconstructions, masked = capsule_net(ids, attn_mask)
-            x, output, reconstructions, masked = x.to('cuda'), output.to('cuda'), reconstructions.to('cuda'), masked.to('cuda')
-            loss = capsule_net.loss(x, output, target, reconstructions)
+            outputs = capsule_net(ids, attn_mask).to('cuda')
+            loss = capsule_net.loss(outputs, target)
             loss.backward()
             optimizer.step()
 
             train_loss += loss
             
             true_labels.extend(labels.cpu().numpy().tolist())
-            predictions.extend(torch.max(masked, dim=1)[1].cpu().numpy().tolist())
+            predictions.extend(torch.max(outputs, dim=1)[1].cpu().numpy().tolist())
 
     print(f'Loss: {train_loss:.4f}')
     print('Accuracy: ', accuracy_score(true_labels, predictions))
@@ -333,14 +281,13 @@ for epoch in range(epochs):
                 labels = batch['labels']
                 target = torch.nn.functional.one_hot(labels, num_classes=3).to('cuda')
 
-                x, output, reconstructions, masked = capsule_net(ids, attn_mask)
-                x, output, reconstructions, masked = x.to('cuda'), output.to('cuda'), reconstructions.to('cuda'), masked.to('cuda')
-                loss = capsule_net.loss(x, output, target, reconstructions)
+                outputs = capsule_net(ids, attn_mask).to('cuda')
+                loss = capsule_net.loss(outputs, target)
                 
                 dev_loss += loss
                 
                 true_labels.extend(labels.cpu().numpy().tolist())
-                predictions.extend(torch.max(masked, dim=1)[1].cpu().numpy().tolist())
+                predictions.extend(torch.max(outputs, dim=1)[1].cpu().numpy().tolist())
 
     print(f'Loss: {dev_loss:.4f}')
     print('Accuracy: ', accuracy_score(true_labels, predictions))
@@ -366,14 +313,13 @@ with torch.no_grad():
             labels = batch['labels']
             target = torch.nn.functional.one_hot(labels, num_classes=3).to('cuda')
 
-            x, output, reconstructions, masked = capsule_net(ids, attn_mask)
-            x, output, reconstructions, masked = x.to('cuda'), output.to('cuda'), reconstructions.to('cuda'), masked.to('cuda')
-            loss = capsule_net.loss(x, output, target, reconstructions)
+            outputs = capsule_net(ids, attn_mask).to('cuda')
+            loss = capsule_net.loss(outputs, target)
             
             test_loss += loss
             
             true_labels.extend(labels.cpu().numpy().tolist())
-            predictions.extend(torch.max(masked, dim=1)[1].cpu().numpy().tolist())
+            predictions.extend(torch.max(outputs, dim=1)[1].cpu().numpy().tolist())
 
 print(f'Loss: {test_loss:.4f}')
 print('Accuracy: ', accuracy_score(true_labels, predictions))
