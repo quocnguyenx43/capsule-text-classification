@@ -18,7 +18,6 @@ from sklearn.metrics import confusion_matrix, classification_report
 import warnings
 warnings.filterwarnings("ignore")
 
-
 print("Reading data")
 train_df = pd.read_csv('./vihsd/train.csv')
 dev_df = pd.read_csv('./vihsd/dev.csv')
@@ -202,54 +201,76 @@ class Decoder(nn.Module):
         return reconstructions, masked
     
 
-padding_size = 200
+class CapsNet(nn.Module):
+    def __init__(self):
+        super(CapsNet, self).__init__()
 
-test_data_0 = torch.rand((5, 768, padding_size, 1))
+        self.phobert = AutoModel.from_pretrained("vinai/phobert-base")
+        self.conv_layer = ConvLayer(in_channels=768, out_channels=256, kernel_size=(9,1))
+        self.primary_capsules = PrimaryCaps(num_capsules=8, in_channels=256, out_channels=32, kernel_size=(9, 1))
+        self.digit_capsules = DigitCaps(num_routes=2944, in_channels=8, num_capsules=3, out_channels=16)
+        self.decoder = Decoder(hidden_size=3*16, output_size=(768, 200, 1), num_classes=3)
+        
+        self.mse_loss = nn.MSELoss()
 
-test_layer_0 = ConvLayer(in_channels=768, out_channels=256, kernel_size=(9,1))
-test_output_0 = test_layer_0(test_data_0)
-print(test_output_0.shape)
+        self.phobert.train()
+        self.phobert.requires_grad_(True)
+        
+    def forward(self, ids, attn_mask):
+        x = self.phobert(ids, attn_mask).last_hidden_state.squeeze(-1)
+        output = self.digit_capsules(self.primary_capsules(self.conv_layer(x)))
+        reconstructions, masked = self.decoder(output, x)
+        return output, reconstructions, masked
+    
+    def loss(self, data, x, target, reconstructions):
+        return self.margin_loss(x, target) + self.reconstruction_loss(data, reconstructions)
+    
+    def margin_loss(self, x, labels, size_average=True):
+        batch_size = x.size(0)
 
-test_layer_1 = PrimaryCaps(num_capsules=8, in_channels=256, out_channels=32, kernel_size=(9, 1))
-test_output_1 = test_layer_1(test_output_0)
-print(test_output_1.shape)
+        v_c = torch.sqrt((x**2).sum(dim=2, keepdim=True))
 
-test_layer_2 = DigitCaps(num_routes=2944, in_channels=8, num_capsules=3, out_channels=16)
-test_output_2 = test_layer_2(test_output_1)
-print(test_output_2.shape)
+        left = F.relu(0.9 - v_c).view(batch_size, -1)
+        right = F.relu(v_c - 0.1).view(batch_size, -1)
 
-test_layer_3 = Decoder(hidden_size=3*16, output_size=(768, 200, 1), num_classes=3)
-test_output_31, test_output_32 = test_layer_3(test_output_2, test_data_0)
-print(test_output_31.shape, test_output_31.shape)
+        loss = labels * left + 0.5 * (1.0 - labels) * right
+        loss = loss.sum(dim=1).mean()
 
-# caps = CapsNet()
-# caps(test_data_1)
+        return loss
+    
+    def reconstruction_loss(self, data, reconstructions):
+        loss = self.mse_loss(reconstructions.view(reconstructions.size(0), -1), data.view(reconstructions.size(0), -1))
+        return loss * 0.0005
 
 
-# print("Preprocessing")
-# # Load the tokenizer and model
-# tokenizer = AutoTokenizer.from_pretrained("vinai/phobert-base")
+print("Preprocessing")
+tokenizer = AutoTokenizer.from_pretrained("vinai/phobert-base")
 
-# X_train = train_df['free_text'].fillna('')
-# y_train = train_df['label_id'].values
+X_train = train_df.head(10)['free_text'].fillna('')
+y_train = train_df.head(10)['label_id'].values
 
-# X_dev = dev_df['free_text'].fillna('')
-# y_dev = dev_df['label_id'].values
+X_dev = dev_df.head(10)['free_text'].fillna('')
+y_dev = dev_df.head(10)['label_id'].values
 
-# X_test = test_df['free_text'].fillna('')
-# y_test = test_df['label_id'].values
+X_test = test_df.head(10)['free_text'].fillna('')
+y_test = test_df.head(10)['label_id'].values
 
-# X_train_ids, X_train_attn_masks = full_preprocess(X_train, tokenizer)
-# X_dev_ids, X_dev_attn_masks = full_preprocess(X_dev, tokenizer)
-# X_test_ids, X_test_attn_masks = full_preprocess(X_test, tokenizer)
+X_train_ids, X_train_attn_masks = full_preprocess(X_train, tokenizer)
+X_dev_ids, X_dev_attn_masks = full_preprocess(X_dev, tokenizer)
+X_test_ids, X_test_attn_masks = full_preprocess(X_test, tokenizer)
 
-# # Create datasets
-# train_dataset = TextDataset(X_train_ids, X_train_attn_masks, y_train)
-# dev_dataset = TextDataset(X_dev_ids, X_dev_attn_masks, y_dev)
-# test_dataset = TextDataset(X_test_ids, X_test_attn_masks, y_test)
+# Create datasets
+train_dataset = TextDataset(X_train_ids, X_train_attn_masks, y_train)
+dev_dataset = TextDataset(X_dev_ids, X_dev_attn_masks, y_dev)
+test_dataset = TextDataset(X_test_ids, X_test_attn_masks, y_test)
 
-# print("Creating dataloader")
-# # Create dataloaders
-# train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-# dev_dataloader = DataLoader(dev_dataset, batch_size=32, shuffle=False)
-# test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+print("Creating dataloader")
+train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+dev_dataloader = DataLoader(dev_dataset, batch_size=32, shuffle=False)
+test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+
+capsule_net = CapsNet().to('cuda')
+for batch in train_dataloader:
+    print(batch)
+    capsule_net(batch['input_ids'], batch['attention_mask'])
+    break
