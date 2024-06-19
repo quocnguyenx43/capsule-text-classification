@@ -272,5 +272,5 @@ test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 capsule_net = CapsNet().to('cuda')
 for batch in train_dataloader:
     print(batch)
-    capsule_net(batch['input_ids'], batch['attention_mask'])
+    capsule_net(batch['input_ids'].to('cuda'), batch['attention_mask'].to('cuda'))
     break
