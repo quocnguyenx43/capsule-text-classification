@@ -251,7 +251,7 @@ for epoch in range(epochs):
 
             optimizer.zero_grad()
             outputs = capsule_net(ids, attn_mask).to('cuda')
-            loss = capsule_net.loss(outputs, target)
+            loss = criterion(outputs, target)
             loss.backward()
             optimizer.step()
 
@@ -282,7 +282,7 @@ for epoch in range(epochs):
                 target = torch.nn.functional.one_hot(labels, num_classes=3).to('cuda')
 
                 outputs = capsule_net(ids, attn_mask).to('cuda')
-                loss = capsule_net.loss(outputs, target)
+                loss = criterion(outputs, target)
                 
                 dev_loss += loss
                 
@@ -314,7 +314,7 @@ with torch.no_grad():
             target = torch.nn.functional.one_hot(labels, num_classes=3).to('cuda')
 
             outputs = capsule_net(ids, attn_mask).to('cuda')
-            loss = capsule_net.loss(outputs, target)
+            loss = criterion(outputs, target)
             
             test_loss += loss
             
