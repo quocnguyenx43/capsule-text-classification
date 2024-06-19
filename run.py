@@ -308,6 +308,9 @@ for epoch in range(epochs):
             
             true_labels.extend(target)
             predictions.extend(torch.max(masked, dim=1)[1])
+
+            print(true_labels)
+            print(predictions)
             
     
             # print(f'Loss: {train_loss:.4f}')
