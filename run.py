@@ -29,8 +29,6 @@ import re
 import numpy as np
 
 USE_CUDA = True
-
-print("Preprocessing")
 STOPWORDS = './vietnamese-stopwords.txt'
 with open(STOPWORDS, "r") as ins:
     stopwords = []
@@ -72,23 +70,6 @@ def full_preprocess(X, tokenizer):
     return X_ids, X_attn_mask
 
 
-# Load the tokenizer and model
-tokenizer = AutoTokenizer.from_pretrained("vinai/phobert-base")
-
-X_train = train_df['free_text'].fillna('')
-y_train = train_df['label_id'].values
-
-X_dev = dev_df['free_text'].fillna('')
-y_dev = dev_df['label_id'].values
-
-X_test = test_df['free_text'].fillna('')
-y_test = test_df['label_id'].values
-
-X_train_ids, X_train_attn_masks = full_preprocess(X_train)
-X_dev_ids, X_dev_attn_masks = full_preprocess(X_dev)
-X_test_ids, X_test_attn_masks = full_preprocess(X_test)
-
-print("Creating dataloader")
 # Define a custom Dataset class
 class TextDataset(Dataset):
     def __init__(self, input_ids, attention_masks, labels):
@@ -105,16 +86,6 @@ class TextDataset(Dataset):
             'attention_mask': self.attention_masks[idx],
             'labels': self.labels[idx]
         }
-
-# Create datasets
-train_dataset = TextDataset(X_train_ids, X_train_attn_masks, y_train)
-dev_dataset = TextDataset(X_dev_ids, X_dev_attn_masks, y_dev)
-test_dataset = TextDataset(X_test_ids, X_test_attn_masks, y_test)
-
-# Create dataloaders
-train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-dev_dataloader = DataLoader(dev_dataset, batch_size=32, shuffle=False)
-test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
 import torch
 import torch.nn as nn
@@ -252,3 +223,32 @@ print(test_output_31.shape, test_output_31.shape)
 
 # caps = CapsNet()
 # caps(test_data_1)
+
+
+# print("Preprocessing")
+# # Load the tokenizer and model
+# tokenizer = AutoTokenizer.from_pretrained("vinai/phobert-base")
+
+# X_train = train_df['free_text'].fillna('')
+# y_train = train_df['label_id'].values
+
+# X_dev = dev_df['free_text'].fillna('')
+# y_dev = dev_df['label_id'].values
+
+# X_test = test_df['free_text'].fillna('')
+# y_test = test_df['label_id'].values
+
+# X_train_ids, X_train_attn_masks = full_preprocess(X_train, tokenizer)
+# X_dev_ids, X_dev_attn_masks = full_preprocess(X_dev, tokenizer)
+# X_test_ids, X_test_attn_masks = full_preprocess(X_test, tokenizer)
+
+# # Create datasets
+# train_dataset = TextDataset(X_train_ids, X_train_attn_masks, y_train)
+# dev_dataset = TextDataset(X_dev_ids, X_dev_attn_masks, y_dev)
+# test_dataset = TextDataset(X_test_ids, X_test_attn_masks, y_test)
+
+# print("Creating dataloader")
+# # Create dataloaders
+# train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+# dev_dataloader = DataLoader(dev_dataset, batch_size=32, shuffle=False)
+# test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=False)
