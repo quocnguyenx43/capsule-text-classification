@@ -18,6 +18,8 @@ from sklearn.metrics import confusion_matrix, classification_report
 import warnings
 warnings.filterwarnings("ignore")
 
+
+print("Reading data")
 train_df = pd.read_csv('./vihsd/train.csv')
 dev_df = pd.read_csv('./vihsd/dev.csv')
 test_df = pd.read_csv('./vihsd/test.csv')
@@ -27,7 +29,9 @@ import re
 import numpy as np
 
 USE_CUDA = True
-STOPWORDS = '/content/drive/MyDrive/test/vietnamese-stopwords.txt'
+
+print("Preprocessing")
+STOPWORDS = './vietnamese-stopwords.txt'
 with open(STOPWORDS, "r") as ins:
     stopwords = []
     for line in ins:
@@ -84,6 +88,7 @@ X_train_ids, X_train_attn_masks = full_preprocess(X_train)
 X_dev_ids, X_dev_attn_masks = full_preprocess(X_dev)
 X_test_ids, X_test_attn_masks = full_preprocess(X_test)
 
+print("Creating dataloader")
 # Define a custom Dataset class
 class TextDataset(Dataset):
     def __init__(self, input_ids, attention_masks, labels):
