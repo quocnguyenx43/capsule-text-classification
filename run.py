@@ -306,8 +306,8 @@ for epoch in range(epochs):
 
             # train_loss += loss.data[0]
             
-            true_labels.extend(target)
-            predictions.extend(torch.max(masked, dim=1)[1])
+            true_labels.extend(target.cpu().numpy().tolist())
+            predictions.extend(torch.max(masked, dim=1)[1].cpu().numpy().tolist())
 
             print(true_labels)
             print(predictions)
