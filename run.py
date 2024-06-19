@@ -271,10 +271,44 @@ dev_dataloader = DataLoader(dev_dataset, batch_size=32, shuffle=False)
 test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
 capsule_net = CapsNet().to('cuda')
-x, output, reconstructions, masked = capsule_net(X_train_ids[:2].to('cuda'), X_train_attn_masks[:2].to('cuda'))
-print(capsule_net.loss(
-    x.to('cuda'),
-    output.to('cuda'),
-    torch.nn.functional.one_hot(torch.tensor(y_train[:2]), num_classes=3).to('cuda'),
-    reconstructions.to('cuda')
-))
+from torch.optim import Adam
+optimizer = Adam(capsule_net.parameters(), lr=0.001)
+# x, output, reconstructions, masked = capsule_net(X_train_ids[:2].to('cuda'), X_train_attn_masks[:2].to('cuda'))
+# print(capsule_net.loss(
+#     x.to('cuda'),
+#     output.to('cuda'),
+#     torch.nn.functional.one_hot(torch.tensor(y_train[:2]), num_classes=3).to('cuda'),
+#     reconstructions.to('cuda')
+# ))
+
+from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
+epochs = 10
+for epoch in range(epochs):
+    capsule_net.train()
+    train_loss = 0
+    true_labels = []
+    predictions = []
+
+    with tqdm(train_dataloader, desc=f"Epoch {epoch + 1}/{epochs}") as tqdm_loader:
+        for batch_idx, batch in enumerate(tqdm_loader):
+            tqdm_loader.set_description(f"Epoch {epoch + 1}/{epochs}, Batch {batch_idx + 1}/{len(train_dataloader)}")
+
+            ids = batch['input_ids'].to('cuda')
+            attn_mask = batch['attention_mask'].to('cuda')
+            target = torch.nn.functional.one_hot(batch['labels'], num_classes=3).to('cuda')
+
+            optimizer.zero_grad()
+            x, output, reconstructions, masked = capsule_net(ids, attn_mask)
+            loss = capsule_net.loss(x, output, target, reconstructions)
+            loss.backward()
+            optimizer.step()
+
+            train_loss += loss.data[0]
+            
+            true_labels.extend(target)
+            predictions.extend(torch.max(masked, dim=1)[1])
+            
+    
+            print(f'Loss: {train_loss:.4f}')
+            print('Accuracy: ', accuracy_score(true_labels, predictions))
+            print('F1:', f1_score(true_labels, predictions))
