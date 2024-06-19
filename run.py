@@ -27,8 +27,8 @@ test_df = pd.read_csv('./vihsd/test.csv')
 import re
 import numpy as np
 
-USE_CUDA = True
-print('cuda: ', USE_CUDA)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print('cuda: ', device)
 STOPWORDS = './vietnamese-stopwords.txt'
 with open(STOPWORDS, "r") as ins:
     stopwords = []
@@ -91,7 +91,6 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.autograd import Variable
-from torchvision import datasets, transforms
 import torch.nn.functional as F
 
 class ConvLayer(nn.Module):
