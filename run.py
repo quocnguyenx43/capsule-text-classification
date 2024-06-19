@@ -221,7 +221,7 @@ class CapsNet(nn.Module):
     def forward(self, ids, attn_mask):
         print('he')
         x = self.phobert(ids, attn_mask).last_hidden_state.squeeze(-1)
-        print(x)
+        print(x.shape)
         output = self.digit_capsules(self.primary_capsules(self.conv_layer(x)))
         reconstructions, masked = self.decoder(output, x)
         return output, reconstructions, masked
