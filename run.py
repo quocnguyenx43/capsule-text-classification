@@ -29,6 +29,7 @@ import re
 import numpy as np
 
 USE_CUDA = True
+print('cuda: ', USE_CUDA)
 STOPWORDS = './vietnamese-stopwords.txt'
 with open(STOPWORDS, "r") as ins:
     stopwords = []
