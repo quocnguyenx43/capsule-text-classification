@@ -315,4 +315,4 @@ for epoch in range(epochs):
             
             # print(f'Loss: {train_loss:.4f}')
             print('Accuracy: ', accuracy_score(true_labels, predictions))
-            print('F1:', f1_score(true_labels, predictions))
+            print('F1:', f1_score(true_labels, predictions, weigted='macro'))
