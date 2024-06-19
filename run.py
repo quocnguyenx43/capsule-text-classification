@@ -202,7 +202,6 @@ class Decoder(nn.Module):
         
         return reconstructions, masked
     
-
 class CapsNet(nn.Module):
     def __init__(self):
         super(CapsNet, self).__init__()
@@ -212,21 +211,21 @@ class CapsNet(nn.Module):
         self.primary_capsules = PrimaryCaps(num_capsules=8, in_channels=256, out_channels=32, kernel_size=(9, 1))
         self.digit_capsules = DigitCaps(num_routes=2944, in_channels=8, num_capsules=3, out_channels=16)
         self.decoder = Decoder(hidden_size=3*16, output_size=(768, 200, 1), num_classes=3)
-        
+
         self.mse_loss = nn.MSELoss()
 
         self.phobert.train()
         self.phobert.requires_grad_(True)
-        
+
     def forward(self, ids, attn_mask):
         x = self.phobert(ids, attn_mask).last_hidden_state.unsqueeze(-1).permute(0, 2, 1, 3)
         output = self.digit_capsules(self.primary_capsules(self.conv_layer(x)))
         reconstructions, masked = self.decoder(output, x)
-        return output, reconstructions, masked
-    
+        return x, output, reconstructions, masked
+
     def loss(self, data, x, target, reconstructions):
         return self.margin_loss(x, target) + self.reconstruction_loss(data, reconstructions)
-    
+
     def margin_loss(self, x, labels, size_average=True):
         batch_size = x.size(0)
 
@@ -239,9 +238,9 @@ class CapsNet(nn.Module):
         loss = loss.sum(dim=1).mean()
 
         return loss
-    
+
     def reconstruction_loss(self, data, reconstructions):
-        loss = self.mse_loss(reconstructions.view(reconstructions.size(0), -1), data.view(reconstructions.size(0), -1))
+        loss = self.mse_loss(reconstructions.reshape(reconstructions.size(0), -1), data.reshape(reconstructions.size(0), -1))
         return loss * 0.0005
 
 
@@ -272,6 +271,10 @@ dev_dataloader = DataLoader(dev_dataset, batch_size=32, shuffle=False)
 test_dataloader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
 capsule_net = CapsNet().to('cuda')
-a, b = capsule_net(X_train_ids[:2].to('cuda'), X_train_attn_masks[:2].to('cuda'))
-print(a.shape, b.shape)
-
+x, output, reconstructions, masked = capsule_net(X_train_ids[:2].to('cuda'), X_train_attn_masks[:2].to('cuda'))
+print(capsule_net.loss(
+    x.to('cuda'),
+    output.to('cuda'),
+    torch.nn.functional.one_hot(torch.tensor(y_train[:2]), num_classes=3).to('cuda'),
+    reconstructions.to('cuda')
+))
